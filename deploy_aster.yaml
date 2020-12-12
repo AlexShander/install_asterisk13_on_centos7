@@ -1,0 +1,775 @@
+---
+- hosts: example.com
+  gather_facts: yes
+  vars:
+    mysql_root_password: "Mysql_Pa$$w0rd"
+    mysql_asterisk_user: "asterisk"
+    mysql_asterisk_password: "Asterisk_Pa$$w0rd"
+  tasks:
+  - name: Set /etc/hostname
+    hostname:
+      name: '{{ inventory_hostname }}'
+    become: yes
+    become_user: root
+
+  - name: add line /etc/hosts
+    lineinfile:
+      dest: /etc/hosts
+      line: '{{ item }}'
+      state: present
+    with_items:
+      - '127.0.0.1 {{ inventory_hostname }}'
+      - '89.218.71.190 repo.575111.kz'
+    become: yes
+    become_user: root
+
+  - name: update system
+    yum:
+      name:
+        - '*'
+      state: latest
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: Check Actual loaded kernel or need reboot
+    shell:  if [ "`rpm -q kernel --queryformat '%{installtime} %{version}-%{release}.%{arch}\n' | sort -n -k1 | tail -1 | cut -d ' ' -f 2`" = "`uname -r`" ]; then echo "False"; else echo "True"; fi
+    register: rebooting
+
+  - debug: msg={{ rebooting }}
+
+  - name: restart system to reboot to newest kernel
+    shell: "sleep 5 && reboot"
+    async: 1
+    poll: 0
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - rebooting.stdout|bool == True
+
+  - name: wait for 40 seconds
+    pause:
+      seconds: 40
+    when:
+      - rebooting.stdout|bool == True
+
+  - name: wait for the system to reboot
+    wait_for_connection:
+      connect_timeout: 20
+      sleep: 5
+      delay: 5
+      timeout: 60
+    when:
+      - rebooting.stdout|bool == True
+
+  - name: Add local OTG Repo
+    yum_repository:
+      name: otgrepo
+      description: OTG Asterisk
+      baseurl: http://repo.575111.kz:9191/otgrepo/
+    become: true
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: yum-clean-metadata
+    command: yum clean metadata
+    args:
+      warn: no
+    become: true
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: Add epel-release
+    yum:
+      name:
+        - epel-release
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: Install webtatic-release for PHP 5.6
+    yum:
+      name:
+        - https://mirror.webtatic.com/yum/el7/webtatic-release.rpm
+    become: true
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: yum-clean-metadata
+    command: yum clean metadata
+    args:
+      warn: no
+    become: true
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: Install packages for asterisk 13
+    yum:
+      name:
+        - mariadb
+        - mariadb-server
+        - sngrep
+        - vim
+        - mc
+        - mtr
+        - mlocate
+        - tftp-server
+        - httpd
+        - ncurses-devel
+        - sendmail
+        - sendmail-cf
+        - sox
+        - newt-devel
+        - libxml2-devel
+        - libtiff-devel
+        - unixODBC
+        - mysql-connector-odbc
+        - audiofile-devel
+        - gtk2-devel
+        - subversion
+        - kernel-devel
+        - git
+        - crontabs
+        - cronie
+        - cronie-anacron
+        - wget
+        - uuid-devel
+        - sqlite-devel
+        - net-tools
+        - gnutls-devel
+        - php56w
+        - php56w-mysql
+        - php56w-mbstring
+        - php56w-pear
+        - php56w-process
+        - php56w-xml
+        - php56w-opcache
+        - php56w-ldap
+        - php56w-intl 
+        - php56w-soap
+        - libselinux-python
+        - lame
+        - lame-libs
+        - dnsmasq
+        - python2-passlib
+      state: latest
+      disable_gpg_check: yes
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name:
+    shell: pear channel-update pear.php.net
+    args:
+      warn: no 
+    become: yes
+    become_method: sudo
+    become_user: root
+
+
+  - name: pear install Console_Getopt
+    shell: pear install Console_Getopt
+    args:
+      warn: no
+    ignore_errors: True
+    become: yes
+    become_method: sudo
+    become_user: root
+
+
+  - name: Enabled and Started HTTPD
+    systemd:
+      daemon_reload: yes
+      scope: system
+      name: httpd
+      enabled: yes
+      state: started
+    become: yes
+    become_method: sudo
+    become_user: root
+
+
+  - name: Enabled and Started mariadb
+    systemd:
+      daemon_reload: yes
+      scope: system
+      name: mariadb
+      enabled: yes
+      state: started
+    become: yes
+    become_method: sudo
+    become_user: root
+
+  - name: Copy files DNSMASQ
+    block:
+      - copy:
+          src: "{{ playbook_dir }}/files/dnsmasq/dnsmasq.conf"
+          dest: "/etc/"
+          owner: root
+          group: root
+          mode: '0644'
+          directory_mode: no
+      - copy:
+          src: "{{ playbook_dir }}/files/dnsmasq/resolve_dnsmask.conf"
+          dest: /etc/
+          owner: root
+          group: root
+          mode: '0644'
+    become: yes
+    become_method: sudo
+    become_user: root 
+
+  - name: Enabled and Started dnsmasq
+    systemd:
+      daemon_reload: yes
+      scope: system
+      name: dnsmasq
+      enabled: yes
+      state: started
+    become: yes
+    become_method: sudo
+    become_user: root
+
+   
+  - name: Adds Python Mysql support on CentOS
+    yum:
+      name:
+        - MySQL-python
+      state: present
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7"
+
+  - name: Sets the root password
+    mysql_user: user=root password="{{ mysql_root_password }}" host="localhost" check_implicit_admin=yes login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Sets the root password
+    mysql_user: user=root password="{{ mysql_root_password }}" host="127.0.0.1" check_implicit_admin=yes login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Deletes anonymous Mysql Server user for {{ ansible_fqdn }}
+    mysql_user: user="" host="{{ ansible_fqdn }}" state="absent" login_user="root" login_password="{{ mysql_root_password }}" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+  - name: Deletes anonynous Mysql server user for locahost
+    mysql_user: user="" state="absent" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Secures the MySQL root user for IPV6 localhost (::1)
+    mysql_user: user="root" password="{{ mysql_root_password }}" host="::1" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Secures the MySQL root user for IPV4 localhost (127.0.0.1)
+    mysql_user: user="root" password="{{ mysql_root_password }}" host="127.0.0.1" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Secures the MySQL root user for localhost domain (localhost)
+    mysql_user: user="root" password="{{ mysql_root_password }}" host="localhost" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+
+  - name: Secures the MySQL root user for server_hostname domain
+    mysql_user: user="root" password="{{ mysql_root_password }}" host="{{ ansible_fqdn }}" check_implicit_admin=no login_user="root" login_password="{{ mysql_root_password }}"
+    become: yes
+    ignore_errors: True
+    become_method: sudo
+    become_user: root
+
+   
+  - name: We are disable Selinux, because we are the socks
+    selinux:
+      policy: targeted
+      state: disabled
+    register: disableselinux
+    become: yes
+    become_method: sudo
+    become_user: root
+
+  - name: restart system to reboot to request SeLinux
+    shell: "sleep 5 && reboot"
+    async: 1
+    poll: 0
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - disableselinux.reboot_required|bool == true
+
+  - name: wait for 40 seconds
+    pause:
+      seconds: 40
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - disableselinux.reboot_required|bool == true
+
+  - name: wait for the system to reboot
+    wait_for_connection:
+      connect_timeout: 20
+      sleep: 5
+      delay: 5
+      timeout: 360
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - disableselinux.reboot_required|bool == true
+
+  - name: Install Asterisk 13
+    yum:
+      name:
+        - asterisk
+        - asterisk-sip
+        - asterisk-curl
+        - asterisk-mysql
+        - asterisk-odbc
+        - asterisk-mp3
+        - asterisk-ael
+        - asterisk-lua
+        - asterisk-sqlite
+        - asterisk-voicemail
+        - asterisk-devel
+        - asterisk-pjsip
+        - asterisk-ooh323 
+      state: latest
+      disable_gpg_check: yes
+    become: yes
+    become_method: sudo
+    become_user: root
+    when:
+      - ansible_facts['distribution'] == "CentOS"
+      - ansible_facts['distribution_major_version'] == "7" 
+
+  - name: Copy the configure files for asterisk to /etc/asterisk
+    copy: 
+      src: "{{ playbook_dir }}/files/etc_asterisk/{{ item }}"
+      dest: "/etc/asterisk/"
+      owner: asterisk
+      group: asterisk
+      mode:  '0640'
+      directory_mode: no
+    loop:
+      - acl.conf
+      - adsi.conf
+      - agents.conf
+      - alarmreceiver.conf
+      - amd.conf
+      - app_mysql.conf
+      - ari.conf
+      - ast_debug_tools.conf
+      - asterisk.adsi
+      - asterisk.conf
+      - ccss.conf
+      - cdr_adaptive_odbc.conf
+      - cdr.conf
+      - cdr_custom.conf
+      - cdr_manager.conf
+      - cdr_mysql.conf
+      - cdr_odbc.conf
+      - cdr_sqlite3_custom.conf
+      - cdr_syslog.conf
+      - cel.conf
+      - cel_custom.conf
+      - cel_odbc.conf
+      - cli_aliases.conf
+      - cli.conf
+      - cli_permissions.conf
+      - codecs.conf
+      - confbridge.conf
+      - dbsep.conf
+      - dnsmgr.conf
+      - dsp.conf
+      - dundi.conf
+      - enum.conf
+      - extconfig.conf
+      - extensions.ael
+      - extensions.conf
+      - extensions_features.conf
+      - extensions_incoming.conf
+      - extensions_ivr.conf
+      - extensions.lua
+      - extensions_ringroup.conf
+      - extensions_timeconditions.conf
+      - features.conf
+      - followme.conf
+      - func_odbc.conf
+      - http.conf
+      - indications.conf
+      - logger.conf
+      - manager.conf
+      - meetme.conf
+      - modules.conf
+      - musiconhold.conf
+      - muted.conf
+      - osp.conf
+      - phoneprov.conf
+      - phpagi.conf
+      - pjproject.conf
+      - pjsip.conf
+      - pjsip_endpoints.conf
+      - pjsip_notify.conf
+      - pjsip_trunk.conf
+      - pjsip_wizard.conf
+      - privacy.conf
+      - queuerules.conf
+      - queues.conf
+      - queues_ringgroup.conf
+      - res_config_mysql.conf
+      - res_config_sqlite3.conf
+      - res_config_sqlite.conf
+      - res_curl.conf
+      - res_fax.conf
+      - res_odbc.conf
+      - res_parking.conf
+      - res_stun_monitor.conf
+      - rtp.conf
+      - say.conf
+      - sip.conf
+      - sip_notify.conf
+      - sla.conf
+      - smdi.conf
+      - sorcery.conf
+      - stasis.conf
+      - statsd.conf
+      - telcordia-1.adsi
+      - udptl.conf
+      - users.conf
+      - voicemail.conf
+      - vpb.conf
+    become: yes
+    become_method: sudo
+    become_user: root
+
+  - name: Configure asterisk.service and /usr/sbin/safe_asterisk
+    block:
+      - shell: if [ "`grep After=mariadb.service /usr/lib/systemd/system/asterisk.service`" = "After=mariadb.service" ]; then echo "True"; else echo "False"; fi
+        register: after_mariadb
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(After=network.target)$'
+          replace: '\g<1>\nAfter=mariadb.service\n'
+        when:
+          - after_mariadb|bool == False
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(ExecStart=)(.*)$'
+          replace: '\g<1>/usr/sbin/safe_asterisk start'
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(ExecStop=)(.*)$'
+          replace: '\g<1>/usr/sbin/safe_asterisk stop'
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(Type=)(.*)$'
+          replace: '\g<1>forking'
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(User=)(.*)$'
+          replace: '\g<1>root'
+      - replace:
+          dest: /usr/lib/systemd/system/asterisk.service
+          regexp: '^(Group=)(.*)$'
+          replace: '\g<1>root'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Copy SQL creation DB
+    copy:
+      src: "{{ playbook_dir  }}/files/databases/asteriskcdrdb_cdrviewer.sql"
+      dest: "/usr/src/"
+      owner: root
+      group: root
+      mode:  '0640'
+      directory_mode: no
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name:
+    mysql_db:
+      name: asteriskcdrdb
+      state: present
+      login_user: root
+      login_password: '{{ mysql_root_password }}'
+      encoding: utf8
+    become: true
+    become_method: sudo
+    become_user: root
+
+  
+  - name: Load Database
+    shell: 
+      cmd: mysql --password="{{ mysql_root_password }}" --user="root" asteriskcdrdb < /usr/src/asteriskcdrdb_cdrviewer.sql 
+    args:
+      warn: no
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Add Mysql user - asterisk
+    mysql_user:
+      name: '{{ mysql_asterisk_user }}'
+      password: '{{ mysql_asterisk_password }}'
+      login_user: root
+      login_password: '{{ mysql_root_password }}'
+      priv: 'asteriskcdrdb.*:ALL,GRANT'
+      state: present
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Copy Asterisk_Viewer
+    copy:
+      src: "{{ playbook_dir }}/files/src/Asterisk-CDR-Viewer-Mod.tar.gz"
+      dest: "/usr/src/"
+      owner: root
+      group: root
+      mode:  '0644'
+      directory_mode: no
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Decompress tar Asterisk-CDR-Viewer-Mod.tar.gz
+    shell: tar -zxf /usr/src/Asterisk-CDR-Viewer-Mod.tar.gz -C /var/www/html/
+    args:
+      warn: no
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Copy httpd config for Asterrisk_Viewer
+    copy:
+      src: "{{ playbook_dir }}/files/httpd/cdr_viewer.conf"
+      dest: "/etc/httpd/conf.d/"
+      owner: asterisk
+      group: asterisk
+      mode:  '644'
+      directory_mode: no
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Create .htpasswd
+    htpasswd:
+      path: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/.htpasswd 
+      name: admin
+      password: Jjfdi12hfc
+      create: yes
+      state: present
+      crypt_scheme: md5_crypt
+      mode: '0644'
+      owner: asterisk
+      group: asterisk
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Asterisk CDR Viewer move config.php.sample to config.php
+    copy:
+      remote_src: True
+      src: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php.sample
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      mode: '0644'
+      owner: asterisk
+      group: asterisk
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change db_user in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(db_user)(.*)$'
+      replace: '\g<1>{{ mysql_asterisk_user }}\g<3>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change db_name in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(db_name)(.*)$'
+      replace: '\g<1>asteriskcdrdb\g<3>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change db_password in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(db_password)(.*)$'
+      replace: '\g<1>{{ mysql_asterisk_password }}\g<3>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change db_password in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(table)(.*)(cdr)(.*)$'
+      replace: '\g<1>\g<2>\g<3>cdr_viewer\g<5>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change options in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: "//PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8',"
+      replace: "PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8',"
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change server_mode in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(server_mode)(.*)(0)(.*)$'
+      replace: '\g<1>\g<2>\g<3>1\g<5>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change filename in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(filename)(.*)$'
+      replace: '\g<1>recordingfile\g<3>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change monitor_dir in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: '^(.*)(monitor_dir)(.*)$'
+      replace: "\\1\\2' => '',"
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change storage_format in Asterisk CDR Viewer
+    replace:
+      dest: /var/www/html/prog-it-Asterisk-CDR-Viewer-Mod-b337420/inc/config/config.php
+      regexp: "^(.*)'storage_format' =>(.*)"
+      replace: "'storage_format' => 5,"
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: chown asteriks:asterisk /var/www/html/
+    file:
+      dest: /var/www/html
+      owner: asterisk
+      group: asterisk
+      mode: u=rwX,g=rX,o=rX
+      recurse: yes
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Create /var/lib/asterisk/sounds/custom/ for voicemonitor
+    file:
+      path: /tmp/devops_directory
+      state: directory
+      owner: asterisk
+      group: asterisk
+      mode: u=rwX,g=rX,o=rX
+      recurse: yes
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Restart HTTPD
+    systemd:
+      name: httpd
+      state: reloaded
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Copy /etc/odbc.ini
+    copy:
+      src: '{{ playbook_dir }}/files/databases/odbc.ini'
+      dest: '/etc/odbc.ini'
+      owner: root
+      group: root
+      mode:  '0644'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Change storage_format in Asterisk CDR Viewer
+    replace:
+      dest: /etc/odbc.ini
+      regexp: '^(.*)(mysqlpassword)(.*)'
+      replace: '\g<1>{{ mysql_asterisk_password }}\g<3>'
+    become: true
+    become_method: sudo
+    become_user: root
+
+  - name: Enabled and Started Asterisk
+    systemd:
+      daemon_reload: yes
+      scope: system
+      name: asterisk
+      enabled: yes
+      state: started
+    become: yes
+    become_method: sudo
+    become_user: root

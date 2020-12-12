@@ -1,0 +1,2 @@
+[example.com]
+example.com ansible_host=example.com ansible_port=22 ansible_user=root ansible_password=Pa$$W0rd
