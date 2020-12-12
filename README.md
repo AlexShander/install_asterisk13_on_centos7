@@ -5,7 +5,7 @@ Spend 10 minutes for your tea and you will have vanilla Asterisk 13 + CDRViewer.
 ansible-playbook -i hosts deploy_aster.yaml
 
 # How to change host
-All config settings You have to change to files in project's directory:
+All config settings You have to change in files in project's directory:
 1) hosts
 2) deploy_aster.yaml
 
