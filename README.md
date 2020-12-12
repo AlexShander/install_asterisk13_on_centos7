@@ -1,5 +1,5 @@
 # install_asterisk13_on_centos7
-Spend 10 minutes for tea and you will have vanilla Asterisk 13 + CDRViewer.
+Spend 10 minutes for your tea and you will have vanilla Asterisk 13 + CDRViewer.
 
 # Hot to run it
 ansible-playbook -i hosts deploy_aster.yaml
