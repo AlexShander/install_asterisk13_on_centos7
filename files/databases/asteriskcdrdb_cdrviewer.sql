@@ -125,7 +125,8 @@ CREATE TABLE `cdr_viewer` (
   KEY `uniqueid` (`uniqueid`),
   KEY `dcontext` (`dcontext`),
   KEY `clid` (`clid`),
-  KEY `did` (`did`)
+  KEY `did` (`did`),
+  KEY `linkedid` (`linkedid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=38387 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -252,7 +253,8 @@ CREATE TABLE `queue_log_for_excel` (
   `DID` varchar(32) NOT NULL DEFAULT '',
   `CLID_Client` varchar(32) NOT NULL DEFAULT '',
   `Wait_Time` int(11) NOT NULL DEFAULT '0',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY (`callid`)
 ) ENGINE=InnoDB AUTO_INCREMENT=10177 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

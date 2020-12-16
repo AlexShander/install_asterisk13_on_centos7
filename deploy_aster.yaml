@@ -523,6 +523,14 @@
           dest: /usr/lib/systemd/system/asterisk.service
           regexp: '^(Group=)(.*)$'
           replace: '\g<1>root'
+      - replace:
+          dest: /etc/httpd/conf/httpd.conf
+          regexp : '^User apache$'
+          replace: 'User asterisk'
+      - replace:
+          dest: /etc/httpd/conf/httpd.conf
+          regexp: '^Group apache$'
+          replace: 'Grop asterisk'
     become: true
     become_method: sudo
     become_user: root
