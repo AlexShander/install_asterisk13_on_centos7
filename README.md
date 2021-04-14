@@ -20,4 +20,4 @@ deploy_aster.yaml:
 
 # P.S.
 All Asterisk-13 packages have been installed from my repository, so you can change it in 
-- '89.218.71.190 repo.575111.kz', just change address and all is OK, if you have the same names of packages in your own repository.
+- '45.135.131.190 voiprepo.575111.kz', just change address and all is OK, if you have the same names of packages in your own repository.
