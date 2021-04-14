@@ -19,7 +19,7 @@
       state: present
     with_items:
       - '127.0.0.1 {{ inventory_hostname }}'
-      - '89.218.71.190 repo.575111.kz'
+      - '45.135.131.190 voiprepo.575111.kz'
     become: yes
     become_user: root
 
@@ -70,7 +70,7 @@
     yum_repository:
       name: otgrepo
       description: OTG Asterisk
-      baseurl: http://repo.575111.kz:9191/otgrepo/
+      baseurl: http://voiprepo.575111.kz:9191/otgrepo/
     become: true
     become_method: sudo
     become_user: root
